@@ -124,11 +124,6 @@ def trivialize_miller_schupp_through_search(
        - unsolved_rels (list): A list of unsolved presentations.
        - solved_paths (list): A list of paths for solved presentations.
    """
-    assert search_fn.__name__ in [
-        "greedy_search",
-        "bfs",
-        "hybrid_greedy_search",
-    ], f"expect search_fn to be greedy, bfs, or hybrid; got {search_fn.__name__}"
 
     rels = {}
 
@@ -217,17 +212,19 @@ if __name__ == "__main__":
 
     assert args.search_fn in ["greedy", "bfs", "hybrid"]
 
+    from ac_solver.search.greedy import greedy_search
+
     if args.search_fn == "greedy":
-        from ac_solver.search.greedy import greedy_search
-        search_fn = greedy_search
+        def search_fn(**kwargs):
+            return greedy_search(alpha=1.0, beta=0.0, **kwargs)
+
+    elif args.search_fn == "hybrid":
+        def search_fn(**kwargs):
+            return greedy_search(alpha=1.0, beta=0.01, **kwargs)
 
     elif args.search_fn == "bfs":
         from ac_solver.search.breadth_first import bfs
         search_fn = bfs
-
-    elif args.search_fn == "hybrid":
-        from ac_solver.search.hybrid_greedy import hybrid_greedy_search
-        search_fn = hybrid_greedy_search
 
     solved_rels, unsolved_rels, solved_paths = trivialize_miller_schupp_through_search(
         min_n=args.min_n,
