@@ -35,7 +35,6 @@ def generate_miller_schupp_presentations(n, max_w_len):
     dict: A dictionary with the following structure:
         'lenw' (int): The length of word w.
         'presentations (list)': A list of all presentations with fixed (n, length(w)).
-
     """
     assert (
         n >= 1 and max_w_len >= 1
@@ -51,33 +50,29 @@ def generate_miller_schupp_presentations(n, max_w_len):
 
     for search_len in range(1, max_w_len + 1):
 
-        # iterate over all possible words of 1, 2, -1, -2 that have length = search_len
         for w in product([1, 2, -1, -2], repeat=search_len):
 
-            # only keep words with exponent sum of x equal to 0
             if sum(x for x in w if abs(x) == 1) != 0:
                 continue
 
-            # reduce x^{-1}w freely and cyclically by applying simplify_relator(..., cyclical=True)
             relator2 = np.array([-1] + list(w), dtype=np.int8)
             relator2, _ = simplify_relator(
                 relator2, search_len + 1, cyclical=True, padded=False
             )
 
-            # if x^{-1} w = x^{-1}, don't consider as len(w) must be > 0
             if np.array_equal(relator2, np.array([-1])):
                 continue
 
-            # if x^{-1} w is a cyclic permutation of x^{-1}w', only keep one of the two.
-            # TODO: the following code can be cleaned up a bit
             relator2 = list(relator2)
             lenw = len(relator2) - 1
+
             if tuple(relator2) not in seen:
                 for i in range(len(relator2)):
                     seen.add(tuple(relator2[i:] + relator2[:i]))
 
                 if lenw not in lenw_to_presentations_dict:
                     lenw_to_presentations_dict[lenw] = []
+
                 relator2 += [0] * (max_relator_length - len(relator2))
                 lenw_to_presentations_dict[lenw] += [relator1 + relator2]
 
@@ -85,7 +80,6 @@ def generate_miller_schupp_presentations(n, max_w_len):
 
 
 def write_list_to_text_file(list, filepath):
-    # A helper function to write a list to a text file.
     if not filepath.endswith(".txt"):
         filepath = filepath + ".txt"
     with open(filepath, "w") as f:
@@ -103,35 +97,38 @@ def trivialize_miller_schupp_through_search(
     write_output_to_file=False,
 ):
     """
-    Applies a search function to Miller-Schupp presentations of varying sizes.
+   Applies a search function to Miller-Schupp presentations of varying sizes.
 
-    This function generates Miller-Schupp presentations for values of `n` in the range [min_n, max_n]
-    and word lengths in the range [min_w_len, max_w_len]. It then applies the provided `search_fn`
-    to each presentation to determine if it is solved or not.
 
-    Parameters:
-    - min_n (int): The minimum value of `n` for which presentations are generated.
-    - max_n (int): The maximum value of `n` for which presentations are generated.
-    - min_w_len (int): The minimum word length of w for presentations.
-    - max_w_len (int): The maximum word length of w for presentations.
-    - max_nodes_to_explore (int): The maximum number of nodes to explore in the search function.
-    - search_fn (function): The search function to apply to each presentation. Currently takes greedy_search or bfs.
-      It should return a tuple (solved, path) where `solved` is a boolean indicating if the presentation was solved,
-      and `path` is the path taken during the search.
-    - write_output_to_file (bool, optional): If True, writes the solved presentations, unsolved presentations,
-      and paths to files. Defaults to False.
+   This function generates Miller-Schupp presentations for values of `n` in the range [min_n, max_n]
+   and word lengths in the range [min_w_len, max_w_len]. It then applies the provided `search_fn`
+   to each presentation to determine if it is solved or not.
 
-    Returns:
-    - tuple: A tuple containing three lists:
-        - solved_rels (list): A list of solved presentations.
-        - unsolved_rels (list): A list of unsolved presentations.
-        - solved_paths (list): A list of paths for solved presentations.
-    """
 
+   Parameters:
+   - min_n (int): The minimum value of `n` for which presentations are generated.
+   - max_n (int): The maximum value of `n` for which presentations are generated.
+   - min_w_len (int): The minimum word length of w for presentations.
+   - max_w_len (int): The maximum word length of w for presentations.
+   - max_nodes_to_explore (int): The maximum number of nodes to explore in the search function.
+   - search_fn (function): The search function to apply to each presentation. Currently takes greedy_search or bfs.
+     It should return a tuple (solved, path) where `solved` is a boolean indicating if the presentation was solved,
+     and `path` is the path taken during the search.
+   - write_output_to_file (bool, optional): If True, writes the solved presentations, unsolved presentations,
+     and paths to files. Defaults to False.
+
+
+   Returns:
+   - tuple: A tuple containing three lists:
+       - solved_rels (list): A list of solved presentations.
+       - unsolved_rels (list): A list of unsolved presentations.
+       - solved_paths (list): A list of paths for solved presentations.
+   """
     assert search_fn.__name__ in [
         "greedy_search",
         "bfs",
-    ], f"expect search_fn to be greedy or bfs; got {search_fn.__name__}"
+        "hybrid_greedy_search",
+    ], f"expect search_fn to be greedy, bfs, or hybrid; got {search_fn.__name__}"
 
     rels = {}
 
@@ -140,7 +137,6 @@ def trivialize_miller_schupp_through_search(
 
     solved_rels, unsolved_rels, solved_paths = [], [], []
 
-    # 🔹 NEW: results logging
     results = []
     instance_id = 0
 
@@ -160,8 +156,6 @@ def trivialize_miller_schupp_through_search(
                     cyclically_reduce_after_moves=False,
                 )
 
-                # If solved, approximate nodes_used by path length
-                # If unsolved, it hit the cap
                 if solved:
                     nodes_used = len(path)
                     solved_rels.append(pres)
@@ -170,7 +164,6 @@ def trivialize_miller_schupp_through_search(
                     nodes_used = max_nodes_to_explore
                     unsolved_rels.append(pres)
 
-                # 🔹 Store row
                 results.append([
                     instance_id,
                     n,
@@ -180,11 +173,10 @@ def trivialize_miller_schupp_through_search(
                     nodes_used,
                 ])
 
-    # 🔹 Write CSV always (for Day 2 experiments)
     dirname = os.path.join(os.path.dirname(os.path.realpath(__file__)), "data")
     os.makedirs(dirname, exist_ok=True)
 
-    csv_filename = f"greedy_budget_{max_nodes_to_explore}.csv"
+    csv_filename = f"{search_fn.__name__}_budget_{max_nodes_to_explore}.csv"
     csv_path = os.path.join(dirname, csv_filename)
 
     with open(csv_path, "w", newline="") as f:
@@ -208,67 +200,34 @@ if __name__ == "__main__":
 
     def parse_args():
         parser = argparse.ArgumentParser()
-        parser.add_argument(
-            "--min-n",
-            type=int,
-            default=1,
-            help="Minimum value of label n of Miller-Schupp series",
-        )
-        parser.add_argument(
-            "--max-n",
-            type=int,
-            default=7,
-            help="Maximum value of label n of Miller-Schupp series",
-        )
-        parser.add_argument(
-            "--min-w-len",
-            type=int,
-            default=1,
-            help="Minimum word-length of w of Miller-Schupp series",
-        )
-        parser.add_argument(
-            "--max-w-len",
-            type=int,
-            default=7,
-            help="Maximum word-length of w of Miller-Schupp series",
-        )
-        parser.add_argument(
-            "--max-nodes-to-explore",
-            type=int,
-            default=int(1e6),
-            help="Maximum number of nodes to explore during tree search.",
-        )
+        parser.add_argument("--min-n", type=int, default=1)
+        parser.add_argument("--max-n", type=int, default=7)
+        parser.add_argument("--min-w-len", type=int, default=1)
+        parser.add_argument("--max-w-len", type=int, default=7)
+        parser.add_argument("--max-nodes-to-explore", type=int, default=int(1e6))
         parser.add_argument(
             "--search-fn",
             type=str,
             default="greedy",
-            help="the name of the search function; greedy or bfs",
+            help="the name of the search function; greedy, bfs, or hybrid",
         )
-        args = parser.parse_args()
-        return args
+        return parser.parse_args()
 
     args = parse_args()
-    assert args.search_fn in [
-        "greedy",
-        "bfs",
-    ], f"expect search-algorithm to be greedy or bfs; got {args.search_fn}"
-    assert args.min_n <= args.max_n, "min_n cannot be greater than max_n"
-    assert (
-        args.min_w_len <= args.max_w_len
-    ), "min_w_len cannot be greater than max_w_len"
+
+    assert args.search_fn in ["greedy", "bfs", "hybrid"]
 
     if args.search_fn == "greedy":
         from ac_solver.search.greedy import greedy_search
-
         search_fn = greedy_search
+
     elif args.search_fn == "bfs":
         from ac_solver.search.breadth_first import bfs
-
         search_fn = bfs
-    else:
-        raise ValueError(
-            f"Unsupported search algorithm: {args.search_fn}; expect greedy or bfs"
-        )
+
+    elif args.search_fn == "hybrid":
+        from ac_solver.search.hybrid_greedy import hybrid_greedy_search
+        search_fn = hybrid_greedy_search
 
     solved_rels, unsolved_rels, solved_paths = trivialize_miller_schupp_through_search(
         min_n=args.min_n,
