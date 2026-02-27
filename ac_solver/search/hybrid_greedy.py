@@ -12,27 +12,14 @@ from ac_solver.envs.utils import is_presentation_trivial
 from ac_solver.envs.ac_moves import ACMove
 
 
-# -----------------------------
-# NEW: Relator imbalance helper
-# -----------------------------
-def relator_imbalance(presentation):
-    pres = np.array(presentation)
-    half = len(pres) // 2
-    r1 = pres[:half]
-    r2 = pres[half:]
-    len_r1 = np.count_nonzero(r1)
-    len_r2 = np.count_nonzero(r2)
-    return abs(len_r1 - len_r2)
-
-
-def greedy_search(
+def hybrid_greedy_search(
     presentation,
     max_nodes_to_explore=10000,
     verbose=False,
     cyclically_reduce_after_moves=False,
-    alpha=1.0,   # NEW: length weight
-    beta=0.0     # NEW: imbalance weight (0.0 keeps pure greedy)
 ):
+    alpha = 0.1  # added weight for imbalance
+
     """
     Performs a greedy search on an AC graph starting from the given presentation.
 
@@ -41,8 +28,6 @@ def greedy_search(
         max_nodes_to_explore (int, optional): Max nodes to explore before termination (default: 10000).
         verbose (bool, optional): Print updates when shorter presentations are found (default: False).
         cyclically_reduce_after_moves (bool, optional): Apply cyclic reduction after each move (default: False).
-        alpha (float): weight for total length (default=1.0)
-        beta (float): weight for relator imbalance (default=0.0)
 
     Returns:
         tuple: (is_search_successful, path)
@@ -54,26 +39,23 @@ def greedy_search(
         presentation, dtype=np.int8
     )  # so that input may be a list or a tuple
 
+    # set initial state for search and maximum relator length allowed
     initial_state = np.array(
         presentation, dtype=np.int8
-    )  # so that input may be a list or a tuple
-
+    )
     max_relator_length = len(presentation) // 2
 
+    # we keep track of word lengths
     first_word_length = np.count_nonzero(presentation[:max_relator_length])
     second_word_length = np.count_nonzero(presentation[max_relator_length:])
     word_lengths = [first_word_length, second_word_length]
     total_initial_length = sum(word_lengths)
 
-    # -----------------------------
-    # MODIFIED PRIORITY HERE
-    # -----------------------------
-    initial_priority = alpha * total_initial_length + beta * relator_imbalance(initial_state)
-
+    # add to a priority queue
     path_length = 0
     to_explore = [
         (
-            initial_priority,
+            total_initial_length,
             path_length,
             tuple(initial_state),
             tuple(word_lengths),
@@ -99,9 +81,7 @@ def greedy_search(
                 word_lengths,
                 cyclical=cyclically_reduce_after_moves,
             )
-
-            state_tup = tuple(new_state)
-            new_length = sum(new_lengths)
+            state_tup, new_length = tuple(new_state), sum(new_lengths)
 
             if new_length < min_length:
                 min_length = new_length
@@ -122,16 +102,14 @@ def greedy_search(
             if state_tup not in tree_nodes:
                 tree_nodes.add(state_tup)
 
-                # -----------------------------
-                # MODIFIED PRIORITY HERE
-                # -----------------------------
-                imbalance = relator_imbalance(new_state)
-                hybrid_priority = alpha * new_length + beta * imbalance
+                # added hybrid priority
+                imbalance = abs(new_lengths[0] - new_lengths[1])
+                priority = new_length + alpha * imbalance
 
                 heapq.heappush(
                     to_explore,
                     (
-                        hybrid_priority,
+                        priority,  # changed from new_length
                         path_length + 1,
                         state_tup,
                         tuple(new_lengths),
@@ -152,12 +130,7 @@ if __name__ == "__main__":
 
     presentation = np.array([1, 1, -2, -2, -2, 0, 0, 1, 2, 1, -2, -1, -2, 0])  # AK(2)
 
-    ans, path = greedy_search(
-        presentation=presentation,
-        max_nodes_to_explore=int(1e6),
-        alpha=1.0,
-        beta=0.0   # set beta > 0 to activate hybrid behavior
-    )
+    ans, path = hybrid_greedy_search(presentation=presentation, max_nodes_to_explore=int(1e6))  # changed here
 
     if path:
         print(

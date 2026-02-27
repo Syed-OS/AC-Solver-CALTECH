@@ -11,6 +11,7 @@ See txt files in "data" subfolder to see the results.
 """
 
 import os
+import csv
 import argparse
 import numpy as np
 from itertools import product
@@ -138,6 +139,11 @@ def trivialize_miller_schupp_through_search(
         rels[n] = generate_miller_schupp_presentations(n, max_w_len)
 
     solved_rels, unsolved_rels, solved_paths = [], [], []
+
+    # 🔹 NEW: results logging
+    results = []
+    instance_id = 0
+
     for n in range(min_n, max_n + 1):
         for lenw in range(min_w_len, max_w_len + 1):
             print(
@@ -145,34 +151,55 @@ def trivialize_miller_schupp_through_search(
             )
 
             for pres in rels[n][lenw]:
+                instance_id += 1
+
                 solved, path = search_fn(
                     presentation=pres,
                     max_nodes_to_explore=max_nodes_to_explore,
                     verbose=False,
                     cyclically_reduce_after_moves=False,
                 )
+
+                # If solved, approximate nodes_used by path length
+                # If unsolved, it hit the cap
                 if solved:
+                    nodes_used = len(path)
                     solved_rels.append(pres)
                     solved_paths.append(path)
                 else:
+                    nodes_used = max_nodes_to_explore
                     unsolved_rels.append(pres)
 
-    if write_output_to_file:
-        dirname = os.path.join(os.path.dirname(os.path.realpath(__file__)), "data")
-        os.makedirs(dirname, exist_ok=True)
-        filename_base = f"n-{min_n}-to-{max_n}_lenw-{min_w_len}-to-{max_w_len}-max-nodes-{max_nodes_to_explore}-{search_fn.__name__}"
-        filepath_base = os.path.join(dirname, filename_base)
-        write_list_to_text_file(list=solved_rels, filepath=filepath_base + "_solved")
-        write_list_to_text_file(
-            list=unsolved_rels, filepath=filepath_base + "_unsolved"
-        )
-        write_list_to_text_file(list=solved_paths, filepath=filepath_base + "_paths")
-        print(
-            f"""saved output in {dirname} with filenames: 
-                {filename_base + "_solved"}
-                {filename_base + "_unsolved"}
-                {filename_base + "_paths"}"""
-        )
+                # 🔹 Store row
+                results.append([
+                    instance_id,
+                    n,
+                    lenw,
+                    max_nodes_to_explore,
+                    int(solved),
+                    nodes_used,
+                ])
+
+    # 🔹 Write CSV always (for Day 2 experiments)
+    dirname = os.path.join(os.path.dirname(os.path.realpath(__file__)), "data")
+    os.makedirs(dirname, exist_ok=True)
+
+    csv_filename = f"greedy_budget_{max_nodes_to_explore}.csv"
+    csv_path = os.path.join(dirname, csv_filename)
+
+    with open(csv_path, "w", newline="") as f:
+        writer = csv.writer(f)
+        writer.writerow([
+            "instance_id",
+            "n",
+            "lenw",
+            "budget",
+            "solved",
+            "nodes_used",
+        ])
+        writer.writerows(results)
+
+    print(f"Saved CSV results to {csv_path}")
 
     return solved_rels, unsolved_rels, solved_paths
 
